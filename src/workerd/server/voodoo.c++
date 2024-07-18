@@ -6,17 +6,9 @@
 // of the Dawn Wire protocol.
 
 #include "workerd/api/gpu/voodoo/voodoo-server.h"
-#include <dawn/dawn_proc.h>
-#include <dawn/native/DawnNative.h>
-#include <dawn/webgpu_cpp.h>
-#include <dawn/wire/WireServer.h>
-#include <filesystem>
-#include <kj/async-io.h>
 #include <kj/debug.h>
 #include <kj/main.h>
 #include <unistd.h>
-#include <workerd/api/gpu/voodoo/voodoo-pipe.h>
-#include <workerd/api/gpu/voodoo/voodoo-protocol.h>
 
 class VoodooMain : public kj::TaskSet::ErrorHandler {
 public:
