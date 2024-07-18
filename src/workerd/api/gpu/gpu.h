@@ -51,7 +51,7 @@ public:
 private:
   jsg::Promise<kj::Maybe<jsg::Ref<GPUAdapter>>>
   requestAdapter(jsg::Lock&, jsg::Optional<GPURequestAdapterOptions>);
-  dawn::native::Instance instance_;
+  wgpu::Instance instance_;
   kj::Own<AsyncRunner> async_;
 };
 

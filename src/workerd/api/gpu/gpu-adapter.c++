@@ -189,7 +189,7 @@ jsg::Ref<GPUSupportedFeatures> GPUAdapter::getFeatures() {
 }
 
 jsg::Ref<GPUSupportedLimits> GPUAdapter::getLimits() {
-  WGPUSupportedLimits limits{};
+  wgpu::SupportedLimits limits{};
   JSG_REQUIRE(adapter_.GetLimits(&limits), TypeError, "failed to get adapter limits");
 
   // need to copy to the C++ version of the object

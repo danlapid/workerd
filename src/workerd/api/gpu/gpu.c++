@@ -3,6 +3,7 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 #include "gpu.h"
+#include "workerd/api/gpu/gpu-utils.h"
 #include "workerd/jsg/exception.h"
 #include <dawn/dawn_proc.h>
 
@@ -37,6 +38,19 @@ kj::String parseAdapterType(wgpu::AdapterType type) {
   }
 }
 
+wgpu::PowerPreference parsePowerPreference(GPUPowerPreference& pf) {
+
+  if (pf == "low-power") {
+    return wgpu::PowerPreference::LowPower;
+  }
+
+  if (pf == "high-performance") {
+    return wgpu::PowerPreference::HighPerformance;
+  }
+
+  JSG_FAIL_REQUIRE(TypeError, "unknown power preference", pf);
+}
+
 jsg::Promise<kj::Maybe<jsg::Ref<GPUAdapter>>>
 GPU::requestAdapter(jsg::Lock& js, jsg::Optional<GPURequestAdapterOptions> options) {
 
@@ -50,33 +64,41 @@ GPU::requestAdapter(jsg::Lock& js, jsg::Optional<GPURequestAdapterOptions> optio
   KJ_UNREACHABLE;
 #endif
 
-  auto adapters = instance_.EnumerateAdapters();
-  if (adapters.empty()) {
-    KJ_LOG(WARNING, "no webgpu adapters found");
-    return js.resolvedPromise(kj::Maybe<jsg::Ref<GPUAdapter>>(kj::none));
-  }
+  wgpu::RequestAdapterOptions adapterOptions{};
+  // TODO(soon): don't set this for remote wire instances
+  adapterOptions.backendType = defaultBackendType;
 
-  kj::Maybe<dawn::native::Adapter> adapter;
-  for (auto& a : adapters) {
-    wgpu::AdapterInfo info;
-    a.GetInfo(&info);
-    if (info.backendType != defaultBackendType) {
-      continue;
+  KJ_IF_SOME(opt, options) {
+    adapterOptions.powerPreference = parsePowerPreference(opt.powerPreference);
+    KJ_IF_SOME(forceFallbackAdapter, opt.forceFallbackAdapter) {
+      adapterOptions.forceFallbackAdapter = forceFallbackAdapter;
     }
-
-    KJ_LOG(INFO, kj::str("found webgpu device '", info.device, "' of type ",
-                         parseAdapterType(info.adapterType)));
-    adapter = a;
-    break;
   }
 
-  KJ_IF_SOME(a, adapter) {
-    kj::Maybe<jsg::Ref<GPUAdapter>> gpuAdapter = jsg::alloc<GPUAdapter>(a, kj::addRef(*async_));
-    return js.resolvedPromise(kj::mv(gpuAdapter));
-  }
+  using RequestAdapterContext = AsyncContext<kj::Maybe<jsg::Ref<GPUAdapter>>>;
+  auto ctx = kj::heap<RequestAdapterContext>(js, kj::addRef(*async_));
+  auto promise = kj::mv(ctx->promise_);
 
-  KJ_LOG(WARNING, "did not find an adapter that matched what we wanted");
-  return js.resolvedPromise(kj::Maybe<jsg::Ref<GPUAdapter>>(kj::none));
+  instance_.RequestAdapter(
+      &adapterOptions, wgpu::CallbackMode::AllowProcessEvents,
+      [ctx = kj::mv(ctx), asyncRunner = kj::addRef(*async_)](
+          wgpu::RequestAdapterStatus status, wgpu::Adapter adapter, char const* message) mutable {
+        wgpu::AdapterInfo info;
+        switch (status) {
+        case wgpu::RequestAdapterStatus::Success:
+          adapter.GetInfo(&info);
+          KJ_LOG(INFO, kj::str("found webgpu device '", info.device, "' of type ",
+                               parseAdapterType(info.adapterType)));
+
+          ctx->fulfiller_->fulfill(jsg::alloc<GPUAdapter>(adapter, kj::mv(asyncRunner)));
+          break;
+        default:
+          KJ_LOG(WARNING, "did not find an adapter that matched what we wanted", (uint32_t)status,
+                 message);
+          ctx->fulfiller_->fulfill(kj::Maybe<jsg::Ref<GPUAdapter>>(kj::none));
+        }
+      });
+  return promise;
 }
 
 } // namespace workerd::api::gpu
