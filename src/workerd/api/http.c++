@@ -15,6 +15,7 @@
 #include <kj/parse/char.h>
 #include <workerd/io/features.h>
 #include <workerd/util/http-util.h>
+#include <workerd/util/autogate.h>
 #include <workerd/util/mimetype.h>
 #include <workerd/util/stream-utils.h>
 #include <workerd/util/thread-scopes.h>
@@ -1198,6 +1199,15 @@ void Request::shallowCopyHeadersTo(kj::HttpHeaders& out) {
 }
 
 kj::Maybe<kj::String> Request::serializeCfBlobJson(jsg::Lock& js) {
+  if(cacheMode != CacheMode::NONE &&
+    util::Autogate::isEnabled(util::AutogateKey::HTTP_REQUEST_CACHE)) {
+    auto clone = cf.deepClone(js);
+    auto obj = KJ_ASSERT_NONNULL(clone.get(js));
+    auto ttl = (CacheMode::NOSTORE == cacheMode) ? -1 : 0;
+    // Works because of the fact there are only two non-none cache modes
+    obj.set(js, "cacheTtl", js.num(ttl));
+    return clone.serialize(js);
+  }
   return cf.serialize(js);
 }
 
@@ -1810,10 +1820,31 @@ jsg::Promise<jsg::Ref<Response>> fetchImplNoOutputLock(
   // If the jsRequest has a CacheMode, we need to handle that here.
   // Currently, the only cache mode we support is undefined, but we will soon support
   // no-cache and no-store. These additional modes will be hidden behind an autogate.
-  if (jsRequest->getCacheMode() != Request::CacheMode::NONE) {
-    return js.rejectedPromise<jsg::Ref<Response>>(
-        js.typeError(kj::str("Unsupported cache mode: ",
-            KJ_ASSERT_NONNULL(jsRequest->getCache(js)))));
+  auto headerIds = ioContext.getHeaderIds();
+  if(util::Autogate::isEnabled(util::AutogateKey::HTTP_REQUEST_CACHE)) {
+    switch(jsRequest->getCacheMode()) {
+      case Request::CacheMode::NOSTORE:
+      case Request::CacheMode::NOCACHE:
+      if(headers.get(headerIds.cacheControl) == kj::none) {
+        headers.set(headerIds.cacheControl, "no-cache");
+      }
+      if(headers.get(headerIds.pragma) == kj::none) {
+        headers.set(headerIds.pragma, "no-cache");
+      }
+      case Request::CacheMode::NONE:
+      if(headers.get(headerIds.cfCacheLevel) == kj::none) {
+        headers.set(headerIds.cfCacheLevel, "byc");
+      }
+      break;
+      default:
+        KJ_UNREACHABLE;
+    }
+  } else {
+    if(jsRequest->getCacheMode() != Request::CacheMode::NONE) {
+      return js.rejectedPromise<jsg::Ref<Response>>(
+          js.typeError(kj::str("Unsupported cache mode: ",
+              KJ_ASSERT_NONNULL(jsRequest->getCache(js)))));
+    }
   }
 
   kj::String url = uriEncodeControlChars(

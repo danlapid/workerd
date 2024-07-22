@@ -232,10 +232,10 @@ export const cacheMode = {
     // TODO(soon): The no-store and no-cache values will be supported
     // soon, at which time this test will need to be updated.
     await assert.rejects((async () => {
-      await fetch('http://example.org', { cache: 'no-store' });
+      await fetch('http://example.org', { cache: 'no-transform' });
     })(), {
       name: 'TypeError',
-      message: 'Unsupported cache mode: no-store',
+      message: 'Unsupported cache mode: no-transform',
     });
   }
 };
