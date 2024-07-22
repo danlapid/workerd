@@ -1410,6 +1410,10 @@ public:
     }
   }
 
+  kj::Own<kj::AsyncIoStream> getGPUConnection() override {
+    KJ_UNIMPLEMENTED();
+  }
+
   kj::Maybe<Service&> getEntrypoint(kj::StringPtr name) {
     return namedEntrypoints.find(name);
   }

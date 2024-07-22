@@ -20,10 +20,27 @@ void initialize() {
   // implementation. For now we will use the native version but in the future we
   // can make use of the wire version if we separate the GPU process or a custom
   // version as a stub in tests.
-  dawnProcSetProcs(&dawn::native::GetProcs());
+
+  // dawnProcSetProcs(&dawn::native::GetProcs());
+  dawnProcSetProcs(&dawn::wire::client::GetProcs());
 }
 
-GPU::GPU() : async_(kj::refcounted<AsyncRunner>(instance_.Get())) {}
+GPU::GPU() {
+
+  // serializer is configured here, optional memory transfer service
+  // is not configured at this time
+  auto& io = IoContext::current();
+  stream_ = io.getIoChannelFactory().getGPUConnection();
+  serializer_ = kj::heap<voodoo::DawnRemoteSerializer>(io.getWaitUntilTasks(), stream_);
+
+  dawn::wire::WireClientDescriptor clientDesc = {};
+  clientDesc.serializer = serializer_;
+  wireClient_ = kj::heap<dawn::wire::WireClient>(clientDesc);
+  auto instanceReservation = wireClient_->ReserveInstance();
+  instance_ = wgpu::Instance::Acquire(instanceReservation.instance);
+
+  async_ = kj::refcounted<AsyncRunner>(instance_);
+}
 
 kj::String parseAdapterType(wgpu::AdapterType type) {
   switch (type) {

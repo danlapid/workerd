@@ -27,7 +27,9 @@
 #include "gpu-texture.h"
 #include "gpu-utils.h"
 #include <dawn/native/DawnNative.h>
+#include <dawn/wire/WireClient.h>
 #include <webgpu/webgpu_cpp.h>
+#include <workerd/api/gpu/voodoo/voodoo-protocol.h>
 #include <workerd/jsg/jsg.h>
 
 // Very experimental initial webgpu support based on the Dawn library.
@@ -51,6 +53,11 @@ public:
 private:
   jsg::Promise<kj::Maybe<jsg::Ref<GPUAdapter>>>
   requestAdapter(jsg::Lock&, jsg::Optional<GPURequestAdapterOptions>);
+  kj::Own<kj::AsyncIoStream> stream_;
+  kj::Own<voodoo::DawnRemoteSerializer> serializer_;
+  kj::Own<dawn::wire::WireClient> wireClient_;
+  // TODO: having a bare wgpu::Instance won't do, we need either
+  // a native-backed instance which we .Get() from, or a wire-backed instance
   wgpu::Instance instance_;
   kj::Own<AsyncRunner> async_;
 };

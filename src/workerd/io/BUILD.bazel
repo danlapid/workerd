@@ -87,7 +87,10 @@ wd_cc_library(
         "@capnp-cpp//src/kj:kj-async",
         "@ssl",
     ] + select({
-        ":set_enable_experimental_webgpu": ["@dawn"],
+        ":set_enable_experimental_webgpu": [
+            "//src/workerd/api:voodoo",
+            "@dawn",
+        ],
         "//conditions:default": [],
     }),
 )
