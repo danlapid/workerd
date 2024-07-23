@@ -1387,12 +1387,14 @@ public:
   using AbortActorsCallback = kj::Function<void()>;
 
   WorkerService(ThreadContext& threadContext, kj::Own<const Worker> worker,
+                kj::Network& network,
                 kj::Maybe<kj::HashSet<kj::String>> defaultEntrypointHandlers,
                 kj::HashMap<kj::String, kj::HashSet<kj::String>> namedEntrypointsParam,
                 const kj::HashMap<kj::String, ActorConfig>& actorClasses,
                 LinkCallback linkCallback, AbortActorsCallback abortActorsCallback)
       : threadContext(threadContext),
         ioChannels(kj::mv(linkCallback)),
+        network(network),
         worker(kj::mv(worker)),
         defaultEntrypointHandlers(kj::mv(defaultEntrypointHandlers)),
         waitUntilTasks(*this), abortActorsCallback(kj::mv(abortActorsCallback)) {
@@ -1411,7 +1413,12 @@ public:
   }
 
   kj::Own<kj::AsyncIoStream> getGPUConnection() override {
-    KJ_UNIMPLEMENTED();
+    // TODO: fetch listenPath from config
+    auto listenPath = "/tmp/server.sock"_kj;
+    auto addr = network.parseAddress(kj::str("unix:", listenPath)).then([](kj::Own<kj::NetworkAddress> address) {
+      return address->connect();
+    });
+    return kj::newPromisedStream(kj::mv(addr));
   }
 
   kj::Maybe<Service&> getEntrypoint(kj::StringPtr name) {
@@ -1974,7 +1981,7 @@ private:
 
   // LinkedIoChannels owns the SqliteDatabase::Vfs, so make sure it is destroyed last.
   kj::OneOf<LinkCallback, LinkedIoChannels> ioChannels;
-
+  kj::Network& network;
   kj::Own<const Worker> worker;
   kj::Maybe<kj::HashSet<kj::String>> defaultEntrypointHandlers;
   kj::HashMap<kj::String, EntrypointService> namedEntrypoints;
@@ -3017,6 +3024,7 @@ kj::Own<Server::Service> Server::makeWorker(kj::StringPtr name, config::Worker::
   };
 
   return kj::heap<WorkerService>(globalContext->threadContext, kj::mv(worker),
+                                 network,
                                  kj::mv(errorReporter.defaultEntrypoint),
                                  kj::mv(errorReporter.namedEntrypoints), localActorConfigs,
                                  kj::mv(linkCallback), KJ_BIND_METHOD(*this, abortAllActors));
