@@ -154,28 +154,23 @@ GPUAdapter::requestDevice(jsg::Lock& js, jsg::Optional<GPUDeviceDescriptor> desc
       },
       (void*)&uErrorCtx->target);
 
-  struct UserData {
-    wgpu::Device device = nullptr;
-    bool requestEnded = false;
-  };
-  UserData userData;
-
+  using RequestDeviceContext = AsyncContext<jsg::Ref<GPUDevice>>;
+  auto ctx = kj::heap<RequestDeviceContext>(js, kj::addRef(*async_));
+  auto promise = kj::mv(ctx->promise_);
   adapter_.RequestDevice(
-      &desc,
-      [](WGPURequestDeviceStatus status, WGPUDevice cDevice, const char* message, void* pUserData) {
-        JSG_REQUIRE(status == WGPURequestDeviceStatus_Success, Error, message);
+      &desc, wgpu::CallbackMode::AllowProcessEvents,
+      [ctx = kj::mv(ctx), uErrorCtx = kj::mv(uErrorCtx), deviceLostCtx = kj::mv(deviceLostCtx),
+       async_ = kj::addRef(*async_)](wgpu::RequestDeviceStatus status, wgpu::Device device,
+                                     const char* message) mutable {
+        JSG_REQUIRE(status == wgpu::RequestDeviceStatus::Success, Error, message);
 
-        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-        userData.device = wgpu::Device::Acquire(cDevice);
-        userData.requestEnded = true;
-      },
-      (void*)&userData);
+        jsg::Ref<GPUDevice> gpuDevice = jsg::alloc<GPUDevice>(
+            kj::mv(device), kj::mv(async_), kj::mv(deviceLostCtx), kj::mv(uErrorCtx));
 
-  KJ_ASSERT(userData.requestEnded);
+        ctx->fulfiller_->fulfill(kj::mv(gpuDevice));
+      });
 
-  jsg::Ref<GPUDevice> gpuDevice = jsg::alloc<GPUDevice>(
-      js, kj::mv(userData.device), kj::addRef(*async_), kj::mv(deviceLostCtx), kj::mv(uErrorCtx));
-  return js.resolvedPromise(kj::mv(gpuDevice));
+  return promise;
 }
 
 jsg::Ref<GPUSupportedFeatures> GPUAdapter::getFeatures() {

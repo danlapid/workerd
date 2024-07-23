@@ -580,7 +580,6 @@ GPUDevice::createComputePipeline(GPUComputePipelineDescriptor descriptor) {
 }
 
 jsg::Promise<kj::Maybe<jsg::Ref<GPUError>>> GPUDevice::popErrorScope(jsg::Lock& js) {
-  auto paf = kj::newPromiseAndFulfiller<kj::Maybe<jsg::Ref<GPUError>>>();
   // This context object will hold information for the callback, including the
   // fullfiller to signal the caller with the result, and an async task that
   // will ensure the device's Tick() function is called periodically. It will be
@@ -676,7 +675,7 @@ jsg::MemoizedIdentity<jsg::Promise<jsg::Ref<GPUDeviceLostInfo>>>& GPUDevice::get
   return lost_promise_;
 }
 
-GPUDevice::GPUDevice(jsg::Lock& js, wgpu::Device d, kj::Own<AsyncRunner> async,
+GPUDevice::GPUDevice(wgpu::Device d, kj::Own<AsyncRunner> async,
                      kj::Own<AsyncContext<jsg::Ref<GPUDeviceLostInfo>>> deviceLostCtx,
                      kj::Own<UncapturedErrorContext> uErrorCtx)
     : device_(d), dlc_(kj::mv(deviceLostCtx)), lost_promise_(kj::mv(dlc_->promise_)),

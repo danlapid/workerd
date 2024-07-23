@@ -26,16 +26,30 @@ void initialize() {
 }
 
 GPU::GPU() {
-
   // serializer is configured here, optional memory transfer service
   // is not configured at this time
   auto& io = IoContext::current();
   stream_ = io.getIoChannelFactory().getGPUConnection();
   serializer_ = kj::heap<voodoo::DawnRemoteSerializer>(io.getWaitUntilTasks(), stream_);
 
+  // spawn task to handle incoming commands on stream
+  io.addTask(serializer_->handleIncomingCommands());
+
+  // create dawn wire client
   dawn::wire::WireClientDescriptor clientDesc = {};
   clientDesc.serializer = serializer_;
   wireClient_ = kj::heap<dawn::wire::WireClient>(clientDesc);
+
+  serializer_->onDawnBuffer = [&](const char* data, size_t len) {
+    KJ_ASSERT(data != nullptr);
+    if (wireClient_->HandleCommands(data, len) == nullptr) {
+      KJ_LOG(ERROR, "onDawnBuffer: wireClient_->HandleCommands failed");
+    }
+    if (!serializer_->Flush()) {
+      KJ_LOG(ERROR, "serializer->Flush() failed");
+    }
+  };
+
   auto instanceReservation = wireClient_->ReserveInstance();
   instance_ = wgpu::Instance::Acquire(instanceReservation.instance);
 
