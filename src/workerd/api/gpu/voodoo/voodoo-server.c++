@@ -13,6 +13,7 @@
 #include <kj/async-io.h>
 #include <kj/debug.h>
 #include <kj/main.h>
+#include <thread>
 #include <unistd.h>
 #include <workerd/api/gpu/voodoo/voodoo-pipe.h>
 #include <workerd/api/gpu/voodoo/voodoo-protocol.h>
@@ -27,6 +28,16 @@ void VoodooServer::startServer() {
   dawnProcSetProcs(&nativeProcs);
   auto adapters = instance.EnumerateAdapters();
   KJ_REQUIRE(!adapters.empty(), "no GPU adapters found");
+  WGPUInstance wgpuInstance = instance.Get();
+
+  // Poke the dawn instance periodically for new events.
+  kj::Thread tickerThread([&wgpuInstance]() mutable {
+    for(;;) {
+      // TODO(soon) is it safe to run this in another thread?
+      dawn::native::InstanceProcessEvents(wgpuInstance);
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+  });
 
   // initialize event loop
   kj::AsyncIoContext io = kj::setupAsyncIo();

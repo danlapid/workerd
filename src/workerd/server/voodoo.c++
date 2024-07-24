@@ -24,7 +24,6 @@ public:
   }
 
   kj::MainBuilder::Validity startServer() {
-    KJ_DBG(listenPath, "will start listening server");
     workerd::api::gpu::voodoo::VoodooServer server(listenPath);
     server.startServer();
     return true;
