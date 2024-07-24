@@ -286,6 +286,23 @@ export const cacheMode = {
     {
       if(!cacheEnabled) {
         await assert.rejects((async () => {
+          await fetch('http://example.org', { cache: 'no-store' });
+        })(), {
+          name: 'Error',
+          message: "The 'cache' field on 'RequestInitializerDict' is not implemented.",
+        });
+      } else {
+        await assert.rejects((async () => {
+          await fetch('http://example.org', { cache: 'no-store' });
+        })(), {
+          name: 'TypeError',
+          message: "Unsupported cache mode: no-store",
+        });
+      }
+    }
+    {
+      if(!cacheEnabled) {
+        await assert.rejects((async () => {
           await fetch('http://example.org', { cache: 'no-cache' });
         })(), {
           name: 'Error',
