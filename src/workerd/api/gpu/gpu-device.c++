@@ -615,6 +615,7 @@ jsg::Promise<kj::Maybe<jsg::Ref<GPUError>>> GPUDevice::popErrorScope(jsg::Lock& 
         }
       });
 
+  async_->MaybeFlush();
   return promise;
 }
 
@@ -645,6 +646,7 @@ GPUDevice::createComputePipelineAsync(jsg::Lock& js, GPUComputePipelineDescripto
         }
       });
 
+  async_->MaybeFlush();
   return promise;
 }
 

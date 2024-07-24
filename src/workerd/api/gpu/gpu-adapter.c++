@@ -169,7 +169,7 @@ GPUAdapter::requestDevice(jsg::Lock& js, jsg::Optional<GPUDeviceDescriptor> desc
 
         ctx->fulfiller_->fulfill(kj::mv(gpuDevice));
       });
-
+  async_->MaybeFlush();
   return promise;
 }
 

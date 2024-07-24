@@ -6,12 +6,14 @@
 
 #include "gpu-adapter-info.h"
 #include "gpu-adapter.h"
+#include "gpu-async-runner.h"
 #include "gpu-bindgroup-layout.h"
 #include "gpu-bindgroup.h"
 #include "gpu-command-buffer.h"
 #include "gpu-command-encoder.h"
 #include "gpu-compute-pass-encoder.h"
 #include "gpu-compute-pipeline.h"
+#include "gpu-container.h"
 #include "gpu-device.h"
 #include "gpu-errors.h"
 #include "gpu-pipeline-layout.h"
@@ -26,10 +28,7 @@
 #include "gpu-texture-view.h"
 #include "gpu-texture.h"
 #include "gpu-utils.h"
-#include <dawn/native/DawnNative.h>
-#include <dawn/wire/WireClient.h>
 #include <webgpu/webgpu_cpp.h>
-#include <workerd/api/gpu/voodoo/voodoo-protocol.h>
 #include <workerd/jsg/jsg.h>
 
 // Very experimental initial webgpu support based on the Dawn library.
@@ -53,11 +52,7 @@ public:
 private:
   jsg::Promise<kj::Maybe<jsg::Ref<GPUAdapter>>>
   requestAdapter(jsg::Lock&, jsg::Optional<GPURequestAdapterOptions>);
-  kj::Own<kj::AsyncIoStream> stream_;
-  kj::Own<voodoo::DawnRemoteSerializer> serializer_;
-  kj::Own<dawn::wire::WireClient> wireClient_;
-  // TODO: having a bare wgpu::Instance won't do, we need either
-  // a native-backed instance which we .Get() from, or a wire-backed instance
+  kj::Own<DawnContainer> dawnContainer_;
   wgpu::Instance instance_;
   kj::Own<AsyncRunner> async_;
 };

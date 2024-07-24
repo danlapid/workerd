@@ -3,7 +3,8 @@
 //     https://opensource.org/licenses/Apache-2.0
 
 #include "gpu.h"
-#include "workerd/api/gpu/gpu-utils.h"
+#include "gpu-native-container.h"
+#include "gpu-wire-container.h"
 #include "workerd/jsg/exception.h"
 #include <dawn/dawn_proc.h>
 
@@ -20,41 +21,18 @@ void initialize() {
   // implementation.
 
   // native version
-  //  dawnProcSetProcs(&dawn::native::GetProcs());
+  // dawnProcSetProcs(&dawn::native::GetProcs());
 
   // remote wire version
   dawnProcSetProcs(&dawn::wire::client::GetProcs());
 }
 
 GPU::GPU() {
-  // serializer is configured here, optional memory transfer service
-  // is not configured at this time
-  auto& io = IoContext::current();
-  stream_ = io.getIoChannelFactory().getGPUConnection();
-  serializer_ = kj::heap<voodoo::DawnRemoteSerializer>(io.getWaitUntilTasks(), stream_);
+  // dawnContainer_ = kj::heap<DawnNativeContainer>();
+  dawnContainer_ = kj::heap<DawnWireContainer>();
 
-  // spawn task to handle incoming commands on stream
-  io.addTask(serializer_->handleIncomingCommands());
-
-  // create dawn wire client
-  dawn::wire::WireClientDescriptor clientDesc = {};
-  clientDesc.serializer = serializer_;
-  wireClient_ = kj::heap<dawn::wire::WireClient>(clientDesc);
-
-  serializer_->onDawnBuffer = [&](const char* data, size_t len) {
-    KJ_ASSERT(data != nullptr);
-    if (wireClient_->HandleCommands(data, len) == nullptr) {
-      KJ_LOG(ERROR, "onDawnBuffer: wireClient_->HandleCommands failed");
-    }
-    if (!serializer_->Flush()) {
-      KJ_LOG(ERROR, "serializer->Flush() failed");
-    }
-  };
-
-  auto instanceReservation = wireClient_->ReserveInstance();
-  instance_ = wgpu::Instance::Acquire(instanceReservation.instance);
-
-  async_ = kj::refcounted<AsyncRunner>(instance_);
+  instance_ = dawnContainer_->getInstance();
+  async_ = kj::refcounted<AsyncRunner>(instance_, &*dawnContainer_);
 }
 
 kj::String parseAdapterType(wgpu::AdapterType type) {
@@ -130,6 +108,7 @@ GPU::requestAdapter(jsg::Lock& js, jsg::Optional<GPURequestAdapterOptions> optio
           ctx->fulfiller_->fulfill(kj::Maybe<jsg::Ref<GPUAdapter>>(kj::none));
         }
       });
+  async_->MaybeFlush();
   return promise;
 }
 
