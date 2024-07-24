@@ -85,6 +85,7 @@ export default {
 
 export const inspect = {
   async test(ctrl, env, ctx) {
+    const cacheEnabled = env.cacheEnabled === "true"
     // Check URL with duplicate search param keys
     const url = new URL("http://user:pass@placeholder:8787/path?a=1&a=2&b=3");
     assert.strictEqual(util.inspect(url),
@@ -124,7 +125,8 @@ export const inspect = {
       body: "message",
       headers: { "Content-Type": "text/plain" }
     });
-    assert.strictEqual(util.inspect(request),
+    if(cacheEnabled) {
+      assert.strictEqual(util.inspect(request),
 `Request {
   cache: undefined,
   keepalive: false,
@@ -144,7 +146,29 @@ export const inspect = {
     [length]: 7n
   }
 }`
-    );
+      );
+    } else {
+      assert.strictEqual(util.inspect(request),
+`Request {
+  keepalive: false,
+  integrity: '',
+  cf: undefined,
+  signal: AbortSignal { reason: undefined, aborted: false, onabort: null },
+  fetcher: null,
+  redirect: 'follow',
+  headers: Headers(1) { 'content-type' => 'text/plain', [immutable]: false },
+  url: 'http://placeholder',
+  method: 'POST',
+  bodyUsed: false,
+  body: ReadableStream {
+    locked: false,
+    [state]: 'readable',
+    [supportsBYOB]: true,
+    [length]: 7n
+  }
+}`
+      );
+    }
 
     // Check response with immutable headers
     const response = await env.SERVICE.fetch("http://placeholder/not-found");
