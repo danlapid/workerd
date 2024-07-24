@@ -69,14 +69,17 @@ bool DawnRemoteSerializer::readMsg() {
         decodeDawnCmdHeader(tmp, &_dawnCmdRLen);
 
         KJ_DBG("will start reading dawn command buffer", _dawnCmdRLen);
-        maybeReadIncomingDawnCmd();
+        if (!maybeReadIncomingDawnCmd()) {
+          // read was succesful but dawn command is still incomplete
+          return true;
+        };
       }
       break;
 
     default:
       // unexpected/corrupt message data
       char c = _rbuf.at(0);
-      KJ_LOG(ERROR, "unexpected message received", c, c, _rbuf.len());
+      KJ_LOG(ERROR, "unexpected message received", c, _rbuf.len());
       return false;
     }
   }
@@ -88,8 +91,10 @@ bool DawnRemoteSerializer::maybeReadIncomingDawnCmd() {
   KJ_REQUIRE(_dawnCmdRLen > 0, "no data to read as dawn command");
   KJ_REQUIRE(_dawnCmdRLen <= DAWNCMD_MAX, "length of data to read as dawn command is too high");
 
-  if (_rbuf.len() < _dawnCmdRLen)
+  if (_rbuf.len() < _dawnCmdRLen) {
+    KJ_DBG("dawn command is still incomplete", _rbuf.len(), _dawnCmdRLen);
     return false;
+  }
 
   // onDawnBuffer expects a contiguous memory segment; attempt to simply reference
   // the data in rbuf. takeRef returns null if the data is not available as a contiguous
