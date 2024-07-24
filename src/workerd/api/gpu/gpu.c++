@@ -15,13 +15,14 @@ void initialize() {
   KJ_FAIL_REQUIRE("unsupported platform for webgpu");
 #endif
 
-  // Dawn native initialization. Dawn proc allows us to point the webgpu methods
+  // Dawn proc allows us to point the webgpu methods
   // to different implementations such as native, wire, or our custom
-  // implementation. For now we will use the native version but in the future we
-  // can make use of the wire version if we separate the GPU process or a custom
-  // version as a stub in tests.
+  // implementation.
 
-  // dawnProcSetProcs(&dawn::native::GetProcs());
+  // native version
+  //  dawnProcSetProcs(&dawn::native::GetProcs());
+
+  // remote wire version
   dawnProcSetProcs(&dawn::wire::client::GetProcs());
 }
 

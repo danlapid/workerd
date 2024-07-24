@@ -1388,13 +1388,14 @@ public:
 
   WorkerService(ThreadContext& threadContext, kj::Own<const Worker> worker,
                 kj::Network& network,
+                config::Config::WebgpuBackend::Reader webgpuBackend,
                 kj::Maybe<kj::HashSet<kj::String>> defaultEntrypointHandlers,
                 kj::HashMap<kj::String, kj::HashSet<kj::String>> namedEntrypointsParam,
                 const kj::HashMap<kj::String, ActorConfig>& actorClasses,
                 LinkCallback linkCallback, AbortActorsCallback abortActorsCallback)
       : threadContext(threadContext),
         ioChannels(kj::mv(linkCallback)),
-        network(network),
+        network(network), webgpuBackend(webgpuBackend),
         worker(kj::mv(worker)),
         defaultEntrypointHandlers(kj::mv(defaultEntrypointHandlers)),
         waitUntilTasks(*this), abortActorsCallback(kj::mv(abortActorsCallback)) {
@@ -1413,11 +1414,11 @@ public:
   }
 
   kj::Own<kj::AsyncIoStream> getGPUConnection() override {
-    // TODO: fetch listenPath from config
-    auto listenPath = "/tmp/server.sock"_kj;
-    auto addr = network.parseAddress(kj::str("unix:", listenPath)).then([](kj::Own<kj::NetworkAddress> address) {
-      return address->connect();
-    });
+    KJ_ASSERT(webgpuBackend.isLocalUnixSocket());
+
+    auto listenPath = webgpuBackend.getLocalUnixSocket();
+    auto addr = network.parseAddress(kj::str("unix:", listenPath))
+                    .then([](kj::Own<kj::NetworkAddress> address) { return address->connect(); });
     return kj::newPromisedStream(kj::mv(addr));
   }
 
@@ -1982,6 +1983,7 @@ private:
   // LinkedIoChannels owns the SqliteDatabase::Vfs, so make sure it is destroyed last.
   kj::OneOf<LinkCallback, LinkedIoChannels> ioChannels;
   kj::Network& network;
+  config::Config::WebgpuBackend::Reader webgpuBackend;
   kj::Own<const Worker> worker;
   kj::Maybe<kj::HashSet<kj::String>> defaultEntrypointHandlers;
   kj::HashMap<kj::String, EntrypointService> namedEntrypoints;
@@ -2577,7 +2579,7 @@ void Server::abortAllActors() {
 }
 
 kj::Own<Server::Service> Server::makeWorker(kj::StringPtr name, config::Worker::Reader conf,
-    capnp::List<config::Extension>::Reader extensions) {
+    capnp::List<config::Extension>::Reader extensions, config::Config::WebgpuBackend::Reader webgpuBackend) {
   TRACE_EVENT("workerd", "Server::makeWorker()", "name", name.cStr());
   auto& localActorConfigs = KJ_ASSERT_NONNULL(actorConfigs.find(name));
 
@@ -3024,7 +3026,7 @@ kj::Own<Server::Service> Server::makeWorker(kj::StringPtr name, config::Worker::
   };
 
   return kj::heap<WorkerService>(globalContext->threadContext, kj::mv(worker),
-                                 network,
+                                 network, webgpuBackend,
                                  kj::mv(errorReporter.defaultEntrypoint),
                                  kj::mv(errorReporter.namedEntrypoints), localActorConfigs,
                                  kj::mv(linkCallback), KJ_BIND_METHOD(*this, abortAllActors));
@@ -3035,7 +3037,8 @@ kj::Own<Server::Service> Server::makeWorker(kj::StringPtr name, config::Worker::
 kj::Own<Server::Service> Server::makeService(
     config::Service::Reader conf,
     kj::HttpHeaderTable::Builder& headerTableBuilder,
-    capnp::List<config::Extension>::Reader extensions) {
+    capnp::List<config::Extension>::Reader extensions,
+    config::Config::WebgpuBackend::Reader webgpuBackend) {
   kj::StringPtr name = conf.getName();
 
   switch (conf.which()) {
@@ -3051,7 +3054,7 @@ kj::Own<Server::Service> Server::makeService(
       return makeNetworkService(conf.getNetwork());
 
     case config::Service::WORKER:
-      return makeWorker(name, conf.getWorker(), extensions);
+      return makeWorker(name, conf.getWorker(), extensions, webgpuBackend);
 
     case config::Service::DISK:
       return makeDiskDirectoryService(name, conf.getDisk(), headerTableBuilder);
@@ -3574,7 +3577,7 @@ void Server::startServices(jsg::V8System& v8System, config::Config::Reader confi
   // Second pass: Build services.
   for (auto serviceConf: config.getServices()) {
     kj::StringPtr name = serviceConf.getName();
-    auto service = makeService(serviceConf, headerTableBuilder, config.getExtensions());
+    auto service = makeService(serviceConf, headerTableBuilder, config.getExtensions(), config.getWebgpuBackend());
 
     services.upsert(kj::str(name), kj::mv(service), [&](auto&&...) {
       reportConfigError(kj::str("Config defines multiple services named \"", name, "\"."));
