@@ -50,6 +50,11 @@ struct DawnRemoteSerializer : public dawn::wire::CommandSerializer {
 
   uint32_t _dawnCmdRLen = 0; // reamining nbytes to read as dawn command buffer
 
+  // when we attempt to flush but we're still not done with the previous
+  // flush operation we will signal for another flush to happen in the
+  // future.
+  bool needsFlush = false;
+
   // _dawnout is the dawn command buffer for outgoing Dawn command data
   struct {
     char bufs[2][DAWNCMD_BUFSIZE];

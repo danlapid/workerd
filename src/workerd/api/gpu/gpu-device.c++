@@ -26,6 +26,13 @@ jsg::Ref<GPUBuffer> GPUDevice::createBuffer(jsg::Lock& js, GPUBufferDescriptor d
   desc.size = descriptor.size;
   desc.usage = static_cast<wgpu::BufferUsage>(descriptor.usage);
   auto buffer = device_.CreateBuffer(&desc);
+  // dawn_wire::client will return nullptr when mappedAtCreation == true and
+  // dawn_wire::client fails to allocate memory for initializing an active
+  // buffer mapping, which is required by latest WebGPU SPEC.
+  JSG_REQUIRE(buffer != nullptr, RangeError,
+              "Failed to execute 'createBuffer' on 'GPUDevice': createBuffer failed, size is too "
+              "large for the implementation when mappedAtCreation == true");
+
   return jsg::alloc<GPUBuffer>(js, kj::mv(buffer), kj::mv(desc), device_, kj::addRef(*async_));
 }
 

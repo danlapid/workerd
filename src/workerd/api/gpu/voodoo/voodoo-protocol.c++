@@ -54,6 +54,11 @@ kj::Promise<void> DawnRemoteSerializer::actualFlush() {
   if (nbyte > 0) {
     co_await _wbuf.writeToStream(stream, nbyte);
   }
+
+  if (needsFlush) {
+    needsFlush = false;
+    Flush();
+  }
 }
 
 // readMsg reads a protocol message from the read buffer (_rbuf)
@@ -130,6 +135,7 @@ bool DawnRemoteSerializer::Flush() {
 
   if (_dawnout.flushlen != 0) {
     /* not done flushing previous buffer */
+    needsFlush = true;
     return false;
   }
 
