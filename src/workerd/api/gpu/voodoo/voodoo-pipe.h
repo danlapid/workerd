@@ -104,7 +104,7 @@ kj::Promise<ssize_t> Pipe<Size>::readFromStream(kj::Own<kj::AsyncIoStream>& stre
   size_t chunkend = std::min(nbyte, Size - _w);
   ssize_t total = 0;
   if (chunkend > 0) {
-    KJ_DBG("will read", _storage, _w, chunkend, stream);
+    KJ_DBG("will read", _w, chunkend);
     total = co_await stream->read(_storage + _w, 0, chunkend);
     KJ_DBG("read", total);
     if (total < (ssize_t)chunkend) {

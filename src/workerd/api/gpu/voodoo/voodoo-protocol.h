@@ -15,7 +15,7 @@
 
 // dawn buffer sizes
 #define DAWNCMD_MSG_HEADER_SIZE 9 /* "D" <HEXBYTE>{8} */
-#define DAWNCMD_MAX (4096 * 32)
+#define DAWNCMD_MAX (4096 * 128)
 #define DAWNCMD_BUFSIZE (DAWNCMD_MAX + DAWNCMD_MSG_HEADER_SIZE)
 
 // protocol messages

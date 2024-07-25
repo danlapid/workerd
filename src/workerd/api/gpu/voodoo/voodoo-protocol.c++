@@ -114,7 +114,7 @@ bool DawnRemoteSerializer::maybeReadIncomingDawnCmd() {
 void* DawnRemoteSerializer::GetCmdSpace(size_t size) {
   KJ_DBG("GetCmdSpace() was called", size);
   KJ_ASSERT(size <= DAWNCMD_MAX);
-  if (sizeof(_dawnout.writebuf) - size < _dawnout.writelen) {
+  if (DAWNCMD_BUFSIZE - _dawnout.writelen < size) {
     KJ_LOG(ERROR,
            "GetCmdSpace() could not allocate enough space for the dawn command and message header",
            size, _dawnout.writelen);
