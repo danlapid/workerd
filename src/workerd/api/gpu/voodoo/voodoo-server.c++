@@ -28,16 +28,6 @@ void VoodooServer::startServer() {
   dawnProcSetProcs(&nativeProcs);
   auto adapters = instance.EnumerateAdapters();
   KJ_REQUIRE(!adapters.empty(), "no GPU adapters found");
-  WGPUInstance wgpuInstance = instance.Get();
-
-  // Poke the dawn instance periodically for new events.
-  kj::Thread tickerThread([&wgpuInstance]() mutable {
-    for(;;) {
-      // TODO(soon) is it safe to run this in another thread?
-      dawn::native::InstanceProcessEvents(wgpuInstance);
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    }
-  });
 
   // initialize event loop
   kj::AsyncIoContext io = kj::setupAsyncIo();
@@ -64,6 +54,20 @@ kj::Promise<void> VoodooServer::acceptLoop(kj::Own<kj::ConnectionReceiver>&& lis
   }
 }
 
+kj::Promise<void> VoodooServer::flushAfterEvents(DawnRemoteSerializer& serializer) {
+  WGPUInstance wgpuInstance = instance.Get();
+
+  while (dawn::native::InstanceProcessEvents(wgpuInstance)) {
+    // TODO(soon): how to sleep here without blocking the thread?
+    // I don't have an IoContext to use setTimeout.
+    // This is currently a busy-loop. :(
+  }
+  if (!serializer.Flush()) {
+    KJ_LOG(ERROR, "serializer->Flush() failed");
+  }
+  co_return;
+}
+
 kj::Promise<void> VoodooServer::handleConnection(kj::Own<kj::AsyncIoStream> stream) {
   KJ_DBG("handling connection");
 
@@ -84,9 +88,7 @@ kj::Promise<void> VoodooServer::handleConnection(kj::Own<kj::AsyncIoStream> stre
     if (wireServer->HandleCommands(data, len) == nullptr) {
       KJ_LOG(ERROR, "onDawnBuffer: wireServer->HandleCommands failed");
     }
-    if (!serializer->Flush()) {
-      KJ_LOG(ERROR, "serializer->Flush() failed");
-    }
+    tasks.add(flushAfterEvents(*serializer));
   };
 
   // process commands

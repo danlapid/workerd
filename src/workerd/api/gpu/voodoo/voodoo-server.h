@@ -34,6 +34,7 @@ public:
 private:
   kj::Promise<void> acceptLoop(kj::Own<kj::ConnectionReceiver>&& listener);
   kj::Promise<void> handleConnection(kj::Own<kj::AsyncIoStream> stream);
+  kj::Promise<void> flushAfterEvents(DawnRemoteSerializer& serializer);
 
   kj::StringPtr listenPath;
   DawnProcTable nativeProcs;
